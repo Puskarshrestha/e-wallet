@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eSewa PRO Wallet</title>
+<style>
+body { font-family: "Segoe UI", sans-serif; background: #f4f6f9; margin:0; }
+.header { background: linear-gradient(135deg,#60bb46,#3da733); color: white; padding: 18px; text-align:center; border-bottom-left-radius:20px; border-bottom-right-radius:20px; box-shadow:0 4px 10px rgba(0,0,0,0.1);}
+.container{padding:15px;}
+.card { background: white; padding: 15px; border-radius:15px; box-shadow:0 5px 12px rgba(0,0,0,0.1); margin-bottom:15px; }
+input, button, select { width:100%; padding:12px; margin:6px 0; border-radius:10px; border:1px solid #ccc; font-size:15px; }
+button { background:#60bb46; color:white; border:none; cursor:pointer; transition:0.3s; }
+button:hover { background:#4aa536; transform:scale(1.03);}
+.hidden { display:none; }
+.balance { font-size:28px; font-weight:bold; margin-top:10px; text-align:center; }
+.grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; text-align:center; }
+.grid div { padding:15px; border-radius:12px; background:#f1f1f1; cursor:pointer; transition:0.2s; }
+.grid div:hover { background:#e0f0d9; }
+ul { list-style:none; padding-left:0; }
+li { background:#f1f1f1; padding:10px; border-radius:10px; margin:6px 0; }
+.nav { position:fixed; bottom:0; width:100%; background:white; display:flex; justify-content:space-around; padding:10px; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+.nav div { font-size:20px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div class="header">eSewa PRO Wallet</div>
+
+<div id="login" class="container">
+<div class="card">
+<h3>Login</h3>
+<input id="phone" placeholder="Phone Number">
+<button onclick="login()">Login</button>
+</div>
+</div>
+
+<div id="home" class="container hidden">
+<div class="card balance-card">
+<div class="balance">Rs <span id="bal">0</span></div>
+</div>
+
+<div class="card">
+<div class="grid">
+<div onclick="showAdd()">➕ Add</div>
+<div onclick="showSend()">💸 Send</div>
+<div onclick="payKhalti()">💳 Khalti</div>
+<div onclick="payEsewa()">💳 eSewa</div>
+</div>
+</div>
+
+<div class="card">
+<h3>Recent Transactions</h3>
+<ul id="history"></ul>
+</div>
+
+<div class="card">
+<button onclick="showProfile()">👤 Profile / KYC</button>
+</div>
+</div>
+
+<div id="add" class="container hidden">
+<div class="card">
+<h3>Add Money</h3>
+<input type="number" id="addAmt" placeholder="Amount">
+<button onclick="addMoney()">Add Money</button>
+<button onclick="goHome()" class="btn-secondary">Back</button>
+</div>
+</div>
+
+<div id="send" class="container hidden">
+<div class="card">
+<h3>Send Money</h3>
+<input type="text" id="receiver" placeholder="Receiver Number">
+<input type="number" id="sendAmt" placeholder="Amount">
+<button onclick="sendMoney()">Send</button>
+<button onclick="goHome()" class="btn-secondary">Back</button>
+</div>
+</div>
+
+<div id="profile" class="container hidden">
+<div class="card">
+<h3>User Profile & KYC</h3>
+<input id="name" placeholder="Full Name">
+<input id="citizen" placeholder="Citizenship No">
+<input id="address" placeholder="Address">
+<button onclick="saveKYC()">Save KYC</button>
+<button onclick="back()">Back</button>
+</div>
+</div>
+
+<div class="nav hidden" id="nav">
+<div onclick="goHome()">🏠</div>
+<div onclick="showAdd()">➕</div>
+<div onclick="showSend()">💸</div>
+<div onclick="showProfile()">👤</div>
+</div>
+
+<script src="https://khalti.com/static/khalti-checkout.js"></script>
+<script>
+let phone = "";
+let balance=0, history=[], kyc={};
+
+// ===== LOGIN =====
+function login(){
+    phone = document.getElementById("phone").value;
+    if(!phone) return alert("Enter phone!");
+    fetch(`/wallet/${phone}`).then(res=>res.json()).then(data=>{
+        balance = data.balance;
+        history = data.history;
+        kyc = data.kyc;
+        loadKYC();
+        update();
+        document.getElementById("login").classList.add("hidden");
+        document.getElementById("home").classList.remove("hidden");
+        document.getElementById("nav").classList.remove("hidden");
+    });
+}
+
+// ===== ADD MONEY =====
+function showAdd(){hideAll(); document.getElementById("add").classList.remove("hidden");}
+function addMoney(){
+    let amt = Number(document.getElementById("addAmt").value);
+    if(!amt) return alert("Enter amount!");
+    balance += amt;
+    history.push("Added Rs " + amt);
+    update();
+    goHome();
+}
+
+// ===== SEND MONEY =====
+function showSend(){hideAll(); document.getElementById("send").classList.remove("hidden");}
+function sendMoney(){
+    let amt = Number(document.getElementById("sendAmt").value);
+    let rec = document.getElementById("receiver").value;
+    if(!rec) return alert("Enter receiver!");
+    if(amt>balance) return alert("Insufficient balance");
+    balance -= amt;
+    history.push("Sent Rs " + amt + " to " + rec);
+    update();
+    goHome();
+}
+
+// ===== PROFILE / KYC =====
+function showProfile(){hideAll(); document.getElementById("profile").classList.remove("hidden");}
+function saveKYC(){
+    kyc = { name: document.getElementById("name").value, citizen: document.getElementById("citizen").value, address: document.getElementById("address").value };
+    fetch("/saveKYC", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({...kyc, phone})
+    }).then(res=>res.json()).then(data=>{
+        if(data.success) alert("KYC Saved!");
+    });
+    goHome();
+}
+function loadKYC(){
+    document.getElementById("name").value = kyc.name || "";
+    document.getElementById("citizen").value = kyc.citizen || "";
+    document.getElementById("address").value = kyc.address || "";
+}
+
+// ===== Khalti =====
+var khaltiConfig = {
+    publicKey: "YOUR_LIVE_PUBLIC_KEY",
+    productIdentity: "wallet-"+Date.now(),
+    productName: "Wallet Topup",
+    productUrl: "http://yourdomain.com",
+    eventHandler:{
+        onSuccess(payload){
+            fetch("/verify/khalti", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({token:payload.token, amount:payload.amount, phone})
+            }).then(res=>res.json()).then(data=>{
+                if(data.success){
+                    balance += payload.amount/100;
+                    history.push("Khalti Payment Rs "+payload.amount/100);
+                    update();
+                    alert("Wallet Updated!");
+                } else alert("Payment Verification Failed!");
+            });
+        },
+        onError(err){console.log(err)},
+        onClose(){console.log("Widget closed")}
+    }
+};
+var khaltiCheckout = new KhaltiCheckout(khaltiConfig);
+function payKhalti(){
+    let amt = Number(prompt("Enter amount to add (Rs)"));
+    if(!amt) return;
+    khaltiCheckout.show({amount: amt*100});
+}
+
+// ===== eSewa =====
+function payEsewa(){
+    let amt = Number(prompt("Enter amount to add (Rs)"));
+    if(!amt) return;
+    let form = document.createElement("form");
+    form.method="POST";
+    form.action="https://esewa.com.np/epay/main";
+    let data = {
+        amt: amt, psc:"0", pdc:"0", txAmt:"0", tAmt:amt,
+        pid: "txn_"+Date.now(),
+        scd:"YOUR_MERCHANT_CODE",
+        su:`http://localhost:3000/success?phone=${phone}`,
+        fu:`http://localhost:3000/failure?phone=${phone}`
+    };
+    for(let k in data){ let input=document.createElement("input"); input.type="hidden"; input.name=k; input.value=data[k]; form.appendChild(input);}
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// ===== UI NAV =====
+function goHome(){hideAll(); document.getElementById("home").classList.remove("hidden");}
+function hideAll(){
+    document.getElementById("home").classList.add("hidden");
+    document.getElementById("add").classList.add("hidden");
+    document.getElementById("send").classList.add("hidden");
+    document.getElementById("profile").classList.add("hidden");
+}
+
+// ===== UPDATE UI =====
+function update(){
+    document.getElementById("bal").innerText = balance;
+    let list = document.getElementById("history");
+    list.innerHTML = "";
+    history.slice(-5).reverse().forEach(i=>{
+        let li=document.createElement("li"); li.innerText=i; list.appendChild(li);
+    });
+}
+</script>
+</body>
+</html>
